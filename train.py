@@ -1,43 +1,107 @@
 import argparse
 import torch
+import torch.optim as optim
 from torch.utils.data import DataLoader
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
+
+# Import your custom modules
 from dataset import UAVInfrastructureDataset
+from losses import UAVCompositeLoss
+from models.custom_backbone import UAVDefectDetector
 
 def set_deterministic_seeds(seed=42):
-    # Required by rubric: Global System Determinism
+    """Required by Phase III: Global System Determinism"""
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-    print(f"Deterministic mode enabled with seed {seed}")
+    print(f"[SYSTEM] Deterministic mode locked with seed {seed}")
+
+def verify_overfit(model, dataloader, criterion, optimizer, device):
+    """
+    Phase III: Network Capacity Overfit Verification.
+    Isolates 1 mini-batch (2-5 samples) and trains until loss nears zero.
+    """
+    print("\n[AUDIT] Initiating Network Capacity Overfit Verification...")
+    model.train()
+    
+    # Extract exactly one batch
+    images, target_boxes, target_classes = next(iter(dataloader))
+    images = images.to(device)
+    target_boxes = target_boxes.to(device)
+    target_classes = target_classes.to(device)
+    
+    for epoch in range(50): # 50 epochs on a single batch
+        optimizer.zero_grad()
+        
+        # Forward pass
+        pred_classes, pred_boxes = model(images)
+        
+        # We need to flatten our targets/preds to match the loss function expectations 
+        # (Assuming batch size 2-5 for the overfit check)
+        loss, cls_loss, box_loss = criterion(pred_classes, pred_boxes, target_classes, target_boxes)
+        
+        loss.backward()
+        optimizer.step()
+        
+        if epoch % 10 == 0:
+            print(f"Overfit Epoch {epoch} | Total Loss: {loss.item():.4f} | Cls: {cls_loss.item():.4f} | Box: {box_loss.item():.4f}")
+            
+    print("[AUDIT] Overfit Verification Complete. If loss approached 0, architecture is sound.\n")
 
 def main(args):
     set_deterministic_seeds()
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"[SYSTEM] Executing on hardware: {device}")
     
-    print(f"Loading data from Kaggle path: {args.image_path}")
+    # 1. Initialize Data Pipeline
+    dataset = UAVInfrastructureDataset(image_dir=args.image_path, annotation_dir=args.label_path)
+    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
     
-    # Initialize dataset using the paths passed from the command line
-    train_dataset = UAVInfrastructureDataset(
-        image_dir=args.image_path,
-        annotation_dir=args.label_path
-    )
+    # 2. Initialize Model Architecture (3 classes for Track I: fracture, corrosion, missing fastener)
+    model = UAVDefectDetector(num_classes=3).to(device)
     
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+    # 3. Initialize Optimization Mechanics
+    criterion = UAVCompositeLoss(lambda_box=1.5, alpha=0.25, gamma=2.0)
+    optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
     
-    # TODO: Initialize model, composite loss, and dynamic scheduler here
-    print("Training pipeline initialized. Ready for Phase II.")
+    # Phase III: Adaptive Scheduler Execution (Cosine Annealing with Warm Restarts)
+    scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2)
+    
+    # 4. Perform Network Overfit Check before main loop
+    if args.overfit_check:
+        verify_overfit(model, dataloader, criterion, optimizer, device)
+        return # Stop execution after check so we can evaluate the logs
+        
+    # 5. Main Training Loop (Simplified for boilerplate)
+    print("\n[SYSTEM] Initiating Main Optimization Loop...")
+    for epoch in range(args.epochs):
+        model.train()
+        epoch_loss = 0.0
+        
+        for batch_idx, (images, target_boxes, target_classes) in enumerate(dataloader):
+            images, target_boxes, target_classes = images.to(device), target_boxes.to(device), target_classes.to(device)
+            
+            optimizer.zero_grad()
+            pred_classes, pred_boxes = model(images)
+            loss, _, _ = criterion(pred_classes, pred_boxes, target_classes, target_boxes)
+            
+            loss.backward()
+            optimizer.step()
+            epoch_loss += loss.item()
+            
+        scheduler.step()
+        
+        print(f"Epoch {epoch+1}/{args.epochs} | Avg Loss: {epoch_loss/len(dataloader):.4f} | LR: {scheduler.get_last_lr()[0]:.6f}")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="AXIS Capstone: UAV Training Pipeline")
-    
-    # Kaggle data paths (Required)
-    parser.add_argument('--image_path', type=str, required=True, help="Path to training images")
-    parser.add_argument('--label_path', type=str, required=True, help="Path to training labels")
-    
-    # Hyperparameters
-    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--image_path', type=str, required=True)
+    parser.add_argument('--label_path', type=str, required=True)
+    parser.add_argument('--batch_size', type=int, default=4) # Keep batch size small for testing
     parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--lr', type=float, default=0.001)
+    parser.add_argument('--overfit_check', action='store_true', help="Run the structural overfit audit")
     
     args = parser.parse_args()
     main(args)
