@@ -25,32 +25,39 @@ def verify_overfit(model, dataloader, criterion, optimizer, device):
     print("\n[AUDIT] Initiating Network Capacity Overfit Verification...")
     model.train()
     
-    # Extract exactly one batch
-    images, target_boxes, target_classes = next(iter(dataloader))
+    # ==========================================
+    # 1. FIND VALID DATA
+    # Keep pulling batches until we find a crop that ACTUALLY contains a defect
+    # ==========================================
+    print("Hunting for a valid defect crop...")
+    for images, target_boxes, target_classes in dataloader:
+        if target_classes.numel() > 0: # We found a crack!
+            print("Defect found! Locking in data.")
+            break
+            
     images = images.to(device)
     target_boxes = target_boxes.to(device)
     target_classes = target_classes.to(device)
     
     # ==========================================
-    # SHAPE ALIGNMENT FIX
+    # 2. SHAPE ALIGNMENT FIX
     # Extract the primary box/class and flatten to 1D to match ResNet heads
     # ==========================================
-    if target_classes.dim() > 1:
+    if target_classes.dim() > 1 and target_classes.size(1) > 0:
         target_classes = target_classes[:, 0]
-    if target_boxes.dim() > 2:
+    if target_boxes.dim() > 2 and target_boxes.size(1) > 0:
         target_boxes = target_boxes[:, 0, :]
         
     target_classes = target_classes.long().view(-1)
     target_boxes = target_boxes.view(-1, 4)
-    # ==========================================
     
+    # ==========================================
+    # 3. OVERFIT LOOP
+    # ==========================================
     for epoch in range(50): 
         optimizer.zero_grad()
         
-        # Forward pass
         pred_classes, pred_boxes = model(images)
-        
-        # Calculate loss with aligned tensors
         loss, cls_loss, box_loss = criterion(pred_classes, pred_boxes, target_classes, target_boxes)
         
         loss.backward()
