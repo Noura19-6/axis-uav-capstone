@@ -41,8 +41,9 @@ class UAVInfrastructureDataset(Dataset):
         labels = []
         
         # CRACK500 uses .png images for annotations instead of .txt files
+        # CRACK500 uses .png images for annotations instead of .txt files
         base_name = os.path.splitext(img_name)[0]
-        label_path = os.path.join(self.annotation_dir, base_name + '.png')
+        label_path = os.path.join(self.annotation_dir, base_name + '_mask.png')
         
         if os.path.exists(label_path):
             mask = cv2.imread(label_path, cv2.IMREAD_GRAYSCALE)
