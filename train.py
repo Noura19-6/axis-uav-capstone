@@ -31,14 +31,26 @@ def verify_overfit(model, dataloader, criterion, optimizer, device):
     target_boxes = target_boxes.to(device)
     target_classes = target_classes.to(device)
     
-    for epoch in range(50): # 50 epochs on a single batch
+    # ==========================================
+    # SHAPE ALIGNMENT FIX
+    # Extract the primary box/class and flatten to 1D to match ResNet heads
+    # ==========================================
+    if target_classes.dim() > 1:
+        target_classes = target_classes[:, 0]
+    if target_boxes.dim() > 2:
+        target_boxes = target_boxes[:, 0, :]
+        
+    target_classes = target_classes.long().view(-1)
+    target_boxes = target_boxes.view(-1, 4)
+    # ==========================================
+    
+    for epoch in range(50): 
         optimizer.zero_grad()
         
         # Forward pass
         pred_classes, pred_boxes = model(images)
         
-        # We need to flatten our targets/preds to match the loss function expectations 
-        # (Assuming batch size 2-5 for the overfit check)
+        # Calculate loss with aligned tensors
         loss, cls_loss, box_loss = criterion(pred_classes, pred_boxes, target_classes, target_boxes)
         
         loss.backward()
@@ -48,7 +60,6 @@ def verify_overfit(model, dataloader, criterion, optimizer, device):
             print(f"Overfit Epoch {epoch} | Total Loss: {loss.item():.4f} | Cls: {cls_loss.item():.4f} | Box: {box_loss.item():.4f}")
             
     print("[AUDIT] Overfit Verification Complete. If loss approached 0, architecture is sound.\n")
-
 def main(args):
     set_deterministic_seeds()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
