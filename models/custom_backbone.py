@@ -106,7 +106,8 @@ class UAVDefectDetector(nn.Module):
             nn.Flatten(),
             nn.Linear(in_channels, 512),
             nn.ReLU(),
-            nn.Linear(512, 4) # [xmin, ymin, xmax, ymax]
+            nn.Linear(512, 4),
+            nn.Sigmoid() # ADD THIS: Forces coordinate predictions between 0.0 and 1.0
         )
 
     def forward(self, x):
