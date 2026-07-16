@@ -40,6 +40,50 @@ class UAVInfrastructureDataset(Dataset):
         boxes = []
         labels = []
         
+        # CRACK500 uses .png images for annotations
+        base_name = os.path.splitext(img_name)[0]
+        label_path = os.path.join(self.annotation_dir, base_name + '_mask.png')
+        
+        if os.path.exists(label_path):
+            mask = cv2.imread(label_path, cv2.IMREAD_GRAYSCALE)
+            if mask is not None:
+                # Isolate the crack (white pixels) and draw geometric contours
+                _, binary_mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
+                contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                
+                for cnt in contours:
+                    x, y, w, h = cv2.boundingRect(cnt)
+                    # Filter out microscopic noise
+                    if w > 10 and h > 10: 
+                        boxes.append([x, y, x + w, y + h])
+                        labels.append(0) # Class 0: Crack
+                    
+        # ==========================================
+        # 3. Apply Transformations
+        # ==========================================
+        if len(boxes) > 0:
+            transformed = self.transform(image=image, bboxes=boxes, class_labels=labels)
+            image_tensor = transformed['image']
+            
+            # Normalize absolute pixels to a 0-1 scale
+            boxes_tensor = torch.tensor(transformed['bboxes'], dtype=torch.float32) / self.tile_size
+            labels_tensor = torch.tensor(transformed['class_labels'], dtype=torch.int64)
+        else:
+            # Handle perfectly smooth concrete patches securely
+            transformed = self.transform(image=image, bboxes=[], class_labels=[])
+            image_tensor = transformed['image']
+            boxes_tensor = torch.empty((0, 4), dtype=torch.float32)
+            labels_tensor = torch.empty((0,), dtype=torch.int64)
+            
+        return image_tensor, boxes_tensor, labels_tensor
+        
+        # ==========================================
+        # 2. DYNAMIC MASK-TO-BOX CONVERTER
+        # Converts segmentation masks to bounding boxes on the fly
+        # ==========================================
+        boxes = []
+        labels = []
+        
         # CRACK500 uses .png images for annotations instead of .txt files
         # CRACK500 uses .png images for annotations instead of .txt files
         base_name = os.path.splitext(img_name)[0]
