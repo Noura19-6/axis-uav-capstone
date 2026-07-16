@@ -11,8 +11,11 @@ class UAVInfrastructureDataset(Dataset):
         self.image_dir = image_dir
         self.annotation_dir = annotation_dir
         self.tile_size = tile_size
-        self.images = [f for f in os.listdir(image_dir) if f.endswith(('.png', '.jpg'))]
         
+
+
+        valid_extensions = ('.png', '.jpg', '.jpeg', '.PNG', '.JPG', '.JPEG')
+        self.images = [f for f in os.listdir(image_dir) if f.endswith(valid_extensions)]
         # Phase I: Advanced Data Pipeline Engineering
         # Geometric Coordinate Invariance & Custom Tiling
         if is_training:
