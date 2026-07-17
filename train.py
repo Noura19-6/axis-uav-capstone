@@ -153,5 +153,5 @@ if valid_batches > 0:
     # ==========================================
     # ADD THIS TO THE VERY END OF main(args):
     # ==========================================
-    torch.save(model.state_dict(), 'axis_uav_final_weights.pth')
-    print("\n[SYSTEM] Model weights successfully saved to 'axis_uav_final_weights.pth'")
+torch.save(model.state_dict(), 'axis_uav_final_weights.pth')
+print("\n[SYSTEM] Model weights successfully saved to 'axis_uav_final_weights.pth'")
