@@ -133,8 +133,8 @@ def main(args):
         
         if valid_batches > 0:
             print(f"Epoch {epoch+1}/{args.epochs} | Avg Loss: {epoch_loss/valid_batches:.4f} | LR: {scheduler.get_last_lr()[0]:.6f}")
-        torch.save(model.state_dict(), 'axis_uav_final_weights.pth')
-        print("\n[SYSTEM] Model weights successfully saved to 'axis_uav_final_weights.pth'")
+torch.save(model.state_dict(), 'axis_uav_final_weights.pth')
+print("\n[SYSTEM] Model weights successfully saved to 'axis_uav_final_weights.pth'")
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="AXIS Capstone: UAV Training Pipeline")
     parser.add_argument('--image_path', type=str, required=True)
